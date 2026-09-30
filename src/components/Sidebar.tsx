@@ -20,6 +20,8 @@ interface SidebarProps {
   onOpenImportModal: () => void;
   onOpenManageTemplatesModal: () => void;
   onExportCsv: () => void;
+  onLogout?: () => void;
+  userEmail?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -28,7 +30,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   overdueCount,
   onOpenImportModal,
   onOpenManageTemplatesModal,
-  onExportCsv
+  onExportCsv,
+  onLogout,
+  userEmail = 'admin@ctrlvision.com.br'
 }) => {
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 min-h-screen select-none">
@@ -153,17 +157,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Sidebar Footer User Info */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-ctrl-blue text-white font-bold flex items-center justify-center text-xs shadow-xs">
-            LV
+      {/* Sidebar Footer User Info & Logout */}
+      <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="w-8 h-8 rounded-full bg-ctrl-blue text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+            {userEmail[0].toUpperCase()}
           </div>
           <div className="overflow-hidden">
-            <p className="text-xs font-bold text-slate-900 truncate">Lucas Vision</p>
-            <p className="text-[11px] text-slate-400 truncate">Prospecção Solo</p>
+            <p className="text-xs font-bold text-slate-900 truncate">Fundador</p>
+            <p className="text-[10px] text-slate-500 truncate">{userEmail}</p>
           </div>
         </div>
+
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0"
+            title="Sair do CRM"
+          >
+            <ShieldCheck className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
     </aside>

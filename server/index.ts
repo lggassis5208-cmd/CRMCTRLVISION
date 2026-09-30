@@ -7,6 +7,7 @@ import { interacoesRouter } from './routes/interacoes.js';
 import { exportRouter } from './routes/export.js';
 import { modelosRouter } from './routes/modelos.js';
 import { insightsRouter } from './routes/insights.js';
+import { authRouter, requireAuth, ensureDefaultUser } from './routes/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,14 +18,17 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// API Routes
-app.use('/api/leads', leadsRouter);
-app.use('/api/interacoes', interacoesRouter);
-app.use('/api/export', exportRouter);
-app.use('/api/modelos', modelosRouter);
-app.use('/api/insights', insightsRouter);
+// Auth Routes (Pública)
+app.use('/api/auth', authRouter);
 
-// Healthcheck
+// Protected API Routes
+app.use('/api/leads', requireAuth, leadsRouter);
+app.use('/api/interacoes', requireAuth, interacoesRouter);
+app.use('/api/export', requireAuth, exportRouter);
+app.use('/api/modelos', requireAuth, modelosRouter);
+app.use('/api/insights', requireAuth, insightsRouter);
+
+// Healthcheck (Pública)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -33,6 +37,7 @@ app.get('/api/health', (req, res) => {
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await ensureDefaultUser();
   console.log(`🚀 CRM CTRL Vision Backend rodando em http://localhost:${PORT}`);
 });

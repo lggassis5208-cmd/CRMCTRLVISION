@@ -58,3 +58,11 @@ model ModeloMensagem {
   texto     String
   criadoEm  DateTime @default(now())
 }
+
+model Usuario {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  senhaHash String
+  nome      String   @default("Fundador CTRL Vision")
+  criadoEm  DateTime @default(now())
+}

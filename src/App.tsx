@@ -12,6 +12,7 @@ import { ImportCsvModal } from './components/ImportCsvModal';
 import { LeadDetailModal } from './components/LeadDetailModal';
 import { CopyTemplateModal } from './components/CopyTemplateModal';
 import { ManageTemplatesModal } from './components/ManageTemplatesModal';
+import { LoginScreen } from './components/LoginScreen';
 import { RawCsvRow } from './utils/csvParser';
 import { formatWhatsAppUrl } from './utils/formatters';
 
@@ -25,6 +26,13 @@ const DEFAULT_FILTERS: FilterOptions = {
 };
 
 export default function App() {
+  // 🔐 Auth State
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('ctrl_crm_token'));
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; nome: string } | null>(() => {
+    const saved = localStorage.getItem('ctrl_crm_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [modelos, setModelos] = useState<ModeloMensagem[]>([]);
   const [metrics, setMetrics] = useState<MetricSummary>({
@@ -59,8 +67,29 @@ export default function App() {
   const [selectedDetailLead, setSelectedDetailLead] = useState<Lead | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Helper fetch autenticado
+  const authFetch = useCallback(async (url: string, options: RequestInit = {}) => {
+    const savedToken = localStorage.getItem('ctrl_crm_token');
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${savedToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    const res = await fetch(url, { ...options, headers });
+    if (res.status === 401) {
+      localStorage.removeItem('ctrl_crm_token');
+      localStorage.removeItem('ctrl_crm_user');
+      setToken(null);
+      setCurrentUser(null);
+      throw new Error('Sessão expirada. Faça login novamente.');
+    }
+    return res;
+  }, []);
+
   // Fetch Leads
   const fetchLeads = useCallback(async () => {
+    if (!token) return;
     try {
       const queryParams = new URLSearchParams();
       if (filters.cidade) queryParams.set('cidade', filters.cidade);
@@ -70,47 +99,47 @@ export default function App() {
       if (filters.fonte) queryParams.set('fonte', filters.fonte);
       if (filters.search) queryParams.set('search', filters.search);
 
-      const res = await fetch(`/api/leads?${queryParams.toString()}`);
-      if (!res.ok) throw new Error('Falha ao carregar leads');
+      const res = await authFetch(`/api/leads?${queryParams.toString()}`);
       const data = await res.json();
       setLeads(data);
     } catch (err) {
       console.error('Erro ao buscar leads:', err);
     }
-  }, [filters]);
+  }, [filters, token, authFetch]);
 
   // Fetch Metrics
   const fetchMetrics = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch('/api/leads/metrics');
-      if (!res.ok) throw new Error('Falha ao carregar métricas');
+      const res = await authFetch('/api/leads/metrics');
       const data = await res.json();
       setMetrics(data);
     } catch (err) {
       console.error('Erro ao buscar métricas:', err);
     }
-  }, []);
+  }, [token, authFetch]);
 
   // Fetch Message Templates
   const fetchModelos = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch('/api/modelos');
-      if (!res.ok) throw new Error('Falha ao carregar modelos');
+      const res = await authFetch('/api/modelos');
       const data = await res.json();
       setModelos(data);
     } catch (err) {
       console.error('Erro ao buscar modelos:', err);
     }
-  }, []);
+  }, [token, authFetch]);
 
   useEffect(() => {
+    if (!token) return;
     const loadAll = async () => {
       setIsLoading(true);
       await Promise.all([fetchLeads(), fetchMetrics(), fetchModelos()]);
       setIsLoading(false);
     };
     loadAll();
-  }, [fetchLeads, fetchMetrics, fetchModelos]);
+  }, [token, fetchLeads, fetchMetrics, fetchModelos]);
 
   const handleFilterChange = (key: keyof FilterOptions, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -120,14 +149,20 @@ export default function App() {
     setFilters(DEFAULT_FILTERS);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('ctrl_crm_token');
+    localStorage.removeItem('ctrl_crm_user');
+    setToken(null);
+    setCurrentUser(null);
+  };
+
   // Stage change handler
   const handleStageChange = async (leadId: string, newStage: Estagio) => {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, estagio: newStage } : l));
 
     try {
-      const res = await fetch(`/api/leads/${leadId}`, {
+      const res = await authFetch(`/api/leads/${leadId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estagio: newStage })
       });
       if (!res.ok) throw new Error('Falha ao atualizar estágio');
@@ -150,9 +185,8 @@ export default function App() {
 
     // 2. Automatically register interaction
     try {
-      await fetch('/api/interacoes', {
+      await authFetch('/api/interacoes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           leadId: lead.id,
           canal: 'WhatsApp',
@@ -182,9 +216,8 @@ export default function App() {
     proximaAcao?: string;
     dataProximoFollowUp?: string;
   }) => {
-    const res = await fetch('/api/interacoes', {
+    const res = await authFetch('/api/interacoes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
 
@@ -203,9 +236,8 @@ export default function App() {
 
   // Inline update Lead handler
   const handleUpdateLeadInline = async (leadId: string, updateData: Partial<Lead>) => {
-    const res = await fetch(`/api/leads/${leadId}`, {
+    const res = await authFetch(`/api/leads/${leadId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData)
     });
 
@@ -225,9 +257,8 @@ export default function App() {
   // Save / Update Lead
   const handleSaveLead = async (leadData: Partial<Lead>) => {
     if (editingLead) {
-      const res = await fetch(`/api/leads/${editingLead.id}`, {
+      const res = await authFetch(`/api/leads/${editingLead.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(leadData)
       });
       if (!res.ok) {
@@ -239,9 +270,8 @@ export default function App() {
         setSelectedDetailLead(updated);
       }
     } else {
-      const res = await fetch('/api/leads', {
+      const res = await authFetch('/api/leads', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(leadData)
       });
       if (!res.ok) {
@@ -256,7 +286,7 @@ export default function App() {
   // Delete Lead
   const handleDeleteLead = async (leadId: string) => {
     try {
-      const res = await fetch(`/api/leads/${leadId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/leads/${leadId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Erro ao deletar lead');
       if (selectedDetailLead && selectedDetailLead.id === leadId) {
         setSelectedDetailLead(null);
@@ -269,9 +299,8 @@ export default function App() {
 
   // Import CSV
   const handleImportLeads = async (rawLeads: RawCsvRow[]) => {
-    const res = await fetch('/api/leads/import', {
+    const res = await authFetch('/api/leads/import', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ leads: rawLeads })
     });
 
@@ -288,9 +317,22 @@ export default function App() {
   // Export CSV
   const handleExportCsv = () => {
     setIsExporting(true);
-    window.location.href = '/api/export/csv';
+    const savedToken = localStorage.getItem('ctrl_crm_token');
+    window.location.href = `/api/export/csv?token=${savedToken}`;
     setTimeout(() => setIsExporting(false), 2000);
   };
+
+  // 🔒 Render Login Screen if not authenticated
+  if (!token) {
+    return (
+      <LoginScreen
+        onLoginSuccess={(newToken, userObj) => {
+          setToken(newToken);
+          setCurrentUser(userObj);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F4F6F9] font-sans text-slate-800">
@@ -307,6 +349,8 @@ export default function App() {
         onOpenImportModal={() => setIsImportOpen(true)}
         onOpenManageTemplatesModal={() => setIsManageTemplatesOpen(true)}
         onExportCsv={handleExportCsv}
+        onLogout={handleLogout}
+        userEmail={currentUser?.email || 'admin@ctrlvision.com.br'}
       />
 
       {/* Right Main Area */}
