@@ -1,0 +1,60 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Lead {
+  id                    String             @id @default(uuid())
+  nome                  String
+  tipoEstrutura         String             @default("Consultório Individual")
+  cidade                String             @default("Goiânia")
+  bairro                String?
+  telefone              String
+  instagram             String?
+  especialidade         String             @default("Optometria")
+  notaGoogle            Float?
+  avaliacoesGoogle      Int?
+  fonte                 String             @default("Google Maps")
+  potencial             String             @default("Médio")
+  justificativaPotencial String?
+  estagio               String             @default("Novo")
+  motivoPerda           String?
+  valorEstimado         Float              @default(79.90)
+  dataUltimoContato     DateTime           @default(now())
+  dataProximoFollowUp   DateTime?
+  criadoEm              DateTime           @default(now())
+  interacoes            Interacao[]
+  historicoEstagios     HistoricoEstagio[]
+}
+
+model Interacao {
+  id          String   @id @default(uuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  data        DateTime @default(now())
+  canal       String   @default("WhatsApp")
+  resumo      String
+  proximaAcao String?
+}
+
+model HistoricoEstagio {
+  id       String    @id @default(uuid())
+  leadId   String
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  estagio  String
+  entrouEm DateTime  @default(now())
+  saiuEm   DateTime?
+}
+
+model ModeloMensagem {
+  id        String   @id @default(uuid())
+  nome      String
+  canal     String   @default("WhatsApp")
+  categoria String   @default("Primeiro Contato")
+  texto     String
+  criadoEm  DateTime @default(now())
+}
